@@ -1,0 +1,202 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      payload:
+        description: Pages CMS action payload
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  discussions: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.event.repository.is_template != true
+    runs-on: ubuntu-latest
+    outputs:
+      commit_sha: ${{ steps.deployment-commit.outputs.sha }}
+      hub_enabled: ${{ steps.hub-settings.outputs.enabled }}
+      hub_url: ${{ steps.hub-settings.outputs.hub_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Ensure immutable post IDs
+        run: bun run posts:ids
+
+      - name: Persist immutable post IDs
+        run: |
+          if [ -z "$(git status --porcelain -- content/posts content/translations)" ]; then
+            echo "No post IDs to commit"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/posts content/translations
+          git commit -m "chore(content): add immutable post IDs [skip ci]"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Detect changed source posts
+        id: changed-posts
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          FORCED_PUSH: ${{ github.event.forced }}
+        run: |
+          changed_posts_file="$RUNNER_TEMP/changed-posts.nul"
+          : > "$changed_posts_file"
+          if [ "${GITHUB_EVENT_NAME}" != "push" ]; then
+            echo "No changed source posts for this event."
+          elif [ "$FORCED_PUSH" = "true" ]; then
+            echo "History was rewritten. Skip post release sync; continue site deployment."
+          elif [ "$BEFORE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            # fetch-depth: 0 fetches reachable history, not commits removed by a
+            # rewrite. Never fetch the deleted history just to generate releases.
+            if [ -n "$BEFORE_SHA" ] && git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null && git merge-base --is-ancestor "$BEFORE_SHA" "$GITHUB_SHA"; then
+              git diff --diff-filter=ACMRT --name-only -z "$BEFORE_SHA" "$GITHUB_SHA" -- 'content/posts/*.md' > "$changed_posts_file"
+            else
+              echo "Previous history is unavailable or was rewritten. Skip post release sync; continue site deployment."
+            fi
+          else
+            git diff-tree --root --diff-filter=ACMRT --no-commit-id --name-only -r -z "$GITHUB_SHA" -- 'content/posts/*.md' > "$changed_posts_file"
+          fi
+
+          if [ -s "$changed_posts_file" ]; then
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Read public release settings
+        id: release-settings
+        run: |
+          value=false
+
+          if [ -f .env.production ]; then
+            matched=$(grep -E '^PUBLIC_RELEASE_USE_TRANSLATIONS=' .env.production | tail -n 1 | cut -d= -f2- || true)
+            if [ -n "$matched" ]; then
+              value=$(printf '%s' "$matched" | tr -d '\r' | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+            fi
+          fi
+
+          echo "use_translations=$value" >> "$GITHUB_OUTPUT"
+
+      - name: Translate content
+        run: bun run translate:content
+        env:
+          DEEPL_API_KEY: ${{ secrets.DEEPL_API_KEY }}
+          DEEPL_API_URL: ${{ secrets.DEEPL_API_URL }}
+
+      - name: Commit translated content
+        run: |
+          if [ -z "$(git status --porcelain -- content/translations)" ]; then
+            echo "No translated content changes to commit"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add content/translations
+          git commit -m "chore(i18n): sync translations [skip ci]"
+          git push origin HEAD:${GITHUB_REF_NAME}
+
+      - name: Sync giscus discussions
+        run: bun ./scripts/sync-giscus-discussions.mjs
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Record deployed commit
+        id: deployment-commit
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Read feed participation settings
+        id: hub-settings
+        run: node scripts/hub-settings.mjs
+
+      - name: Build site
+        run: bun run build
+        env:
+          GITBLOG_BUILD_COMMIT: ${{ steps.deployment-commit.outputs.sha }}
+          GITHUB_ACTIONS: 'true'
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+
+      - name: Verify feed manifest
+        run: test -f build/.well-known/blog-hub.json
+
+      - name: Sync post releases
+        if: steps.changed-posts.outputs.has_changes == 'true'
+        run: bun ./scripts/sync-post-releases.mjs
+        env:
+          CHANGED_POST_FILES_PATH: ${{ runner.temp }}/changed-posts.nul
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_USE_TRANSLATIONS: ${{ steps.release-settings.outputs.use_translations }}
+
+      # upload-pages-artifact excludes all dot directories, including .well-known.
+      - name: Package Pages including public manifest
+        run: |
+          tar --dereference --hard-dereference --directory build \
+            --exclude=.git --exclude=.github --exclude='.env*' \
+            -cf "$RUNNER_TEMP/artifact.tar" .
+          tar -tf "$RUNNER_TEMP/artifact.tar" ./.well-known/blog-hub.json > /dev/null
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  register:
+    needs: [build, deploy]
+    if: needs.build.outputs.hub_enabled == 'true'
+    uses: gitblogapp/svelte-gitblog-template/.github/workflows/register-blog.yml@5e94932e25fc5e048ff43cfe5b806579948a549c
+    permissions:
+      contents: read
+      pages: read
+      id-token: write
+    with:
+      hub_url: ${{ needs.build.outputs.hub_url }}
+      commit_sha: ${{ needs.build.outputs.commit_sha }}

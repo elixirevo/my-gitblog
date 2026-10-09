@@ -1,0 +1,24 @@
+{
+	"schemaVersion": 1,
+	"themeApiVersion": 1,
+	"extensionApiVersion": 1,
+	"preserve": [
+		"content",
+		"static",
+		"src/lib/theme",
+		"src/lib/extensions",
+		"src/app.css",
+		"src/app.html",
+		".env.production",
+		".pages.yml"
+	],
+	"mergeOnly": [
+		"src/routes",
+		"package.json",
+		"bun.lock",
+		"vite.config.ts",
+		"svelte.config.js",
+		"tsconfig.json",
+		".github/workflows"
+	]
+}

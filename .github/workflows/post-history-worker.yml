@@ -1,0 +1,37 @@
+name: GitBlog post history worker
+
+# Runs as a job in the calling blog repository, not as a service-repository run.
+on:
+  workflow_call:
+    inputs:
+      operation:
+        required: true
+        type: string
+      phase:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  history:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      # Checkout approved public runner code, never the caller's executable files.
+      # No App installation or extra secret is needed to read this public repository.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: gitblogapp/svelte-gitblog-template
+          ref: ec052435c0d477b3207b1bcd500bf03487426a90
+          path: history-runner
+          sparse-checkout: scripts/history
+          persist-credentials: false
+      - run: python3 -m pip install --disable-pip-version-check -r history-runner/scripts/history/requirements.txt
+      - name: Analyze or remove post history
+        env:
+          HISTORY_OPERATION: ${{ inputs.operation }}
+          HISTORY_PHASE: ${{ inputs.phase }}
+        run: python3 history-runner/scripts/history/run.py

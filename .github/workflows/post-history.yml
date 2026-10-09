@@ -1,0 +1,37 @@
+name: Remove post from Git history
+run-name: gitblog-history:${{ inputs.operation }}:${{ inputs.phase }}
+
+# GitBlog Studio dispatches this only after an administrator requests analysis
+# or confirms the exact removal plan. Runs and logs belong to this blog.
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: GitBlog operation ID
+        required: true
+        type: string
+      phase:
+        description: Analyze or apply the confirmed removal
+        required: true
+        type: choice
+        options:
+          - analyze
+          - apply
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gitblog-history
+  cancel-in-progress: false
+
+jobs:
+  history:
+    if: github.event.repository.is_template != true
+    # Public, immutable runner code. No service-repository App installation or
+    # blog secret is required. Keep this pin aligned with the GitBlog server.
+    uses: gitblogapp/svelte-gitblog-template/.github/workflows/post-history-worker.yml@59a3f6dfece69d2e50dd7e8d7196ab7d96cedbfb
+    with:
+      operation: ${{ inputs.operation }}
+      phase: ${{ inputs.phase }}

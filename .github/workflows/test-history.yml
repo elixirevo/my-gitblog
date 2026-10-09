@@ -1,0 +1,30 @@
+name: Test history removal
+on:
+  pull_request:
+    paths:
+      [
+        'scripts/history/**',
+        'tests/history/**',
+        '.github/workflows/post-history-worker.yml',
+        '.github/workflows/test-history.yml'
+      ]
+  push:
+    branches: [main]
+    paths:
+      [
+        'scripts/history/**',
+        'tests/history/**',
+        '.github/workflows/post-history-worker.yml',
+        '.github/workflows/test-history.yml'
+      ]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - run: python3 -m pip install --disable-pip-version-check -r scripts/history/requirements.txt
+      - run: PYTHONPATH=scripts/history python3 -m unittest discover -s tests/history -p 'test_*.py' -v

@@ -1,0 +1,34 @@
+name: Register GitBlog feed
+on:
+  workflow_call:
+    inputs:
+      hub_url:
+        type: string
+        default: https://gitblog.app
+      commit_sha:
+        type: string
+        default: ''
+permissions:
+  contents: read
+  pages: read
+  id-token: write
+jobs:
+  register:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    steps:
+      # Only trusted, pinned code runs with an OIDC token. Never checkout the blog.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: gitblogapp/svelte-gitblog-template
+          ref: cc23d87e63f733a990f6196f01039a86238db074
+          path: registration
+          sparse-checkout: scripts/register-blog.mjs
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+      - name: Register and refresh public feed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITBLOG_HUB_URL: ${{ inputs.hub_url }}
+          GITBLOG_DEPLOYED_COMMIT: ${{ inputs.commit_sha }}
+        run: node registration/scripts/register-blog.mjs

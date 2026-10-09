@@ -1,0 +1,128 @@
+media:
+  input: static/uploads
+  output: /uploads
+  rename: safe
+  categories: [image]
+
+content:
+  - name: posts
+    label: Posts
+    type: collection
+    path: content/posts
+    filename:
+      template: '{year}-{month}-{day}-{title}.md'
+      field: create
+    view:
+      primary: title
+      fields: [title, date, category, tags, published]
+      sort: [date, title, category]
+      search: [title, description, category, tags]
+      default:
+        sort: date
+        order: desc
+    fields:
+      - name: title
+        label: Title
+        type: string
+      - name: description
+        label: Description
+        type: text
+      - name: date
+        label: Publish date
+        type: date
+        options:
+          time: true
+          format: "yyyy-MM-dd'T'HH:mm:ss"
+          step: 1
+      - name: updated
+        label: Updated date
+        type: date
+        options:
+          time: true
+          format: "yyyy-MM-dd'T'HH:mm:ss"
+          step: 1
+      - name: published
+        label: Published
+        type: boolean
+      - name: category
+        label: Category
+        type: reference
+        options:
+          collection: categories
+          search: title
+          value: '{title}'
+          label: '{title}'
+      - name: tags
+        label: Tags
+        type: reference
+        options:
+          collection: tags
+          multiple: true
+          search: title
+          value: '{title}'
+          label: '{title}'
+      - name: cover
+        label: Cover image
+        type: image
+        options:
+          path: covers
+      - name: body
+        label: Body
+        type: rich-text
+        options:
+          format: markdown
+          path: posts
+          switcher: true
+  - name: categories
+    label: Categories
+    type: collection
+    path: content/categories
+    filename:
+      template: '{title}.md'
+      field: create
+    view:
+      primary: title
+      fields: [title]
+      sort: [title]
+      search: [title]
+      default:
+        sort: title
+        order: asc
+    fields:
+      - name: title
+        label: Title
+        type: string
+  - name: tags
+    label: Tags
+    type: collection
+    path: content/tags
+    filename:
+      template: '{title}.md'
+      field: create
+    view:
+      primary: title
+      fields: [title]
+      sort: [title]
+      search: [title]
+      default:
+        sort: title
+        order: asc
+    fields:
+      - name: title
+        label: Title
+        type: string
+
+settings:
+  content:
+    merge: true
+  commit:
+    templates:
+      create: 'content(create): {path}'
+      update: 'content(update): {path}'
+      delete: 'content(delete): {path}'
+      rename: 'content(rename): {oldPath} -> {newPath}'
+
+actions:
+  - name: deploy-site
+    label: Deploy GitHub Pages
+    workflow: deploy.yml
