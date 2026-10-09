@@ -18,7 +18,7 @@
 		"translate:content": "bun run posts:ids && bun ./scripts/translate-posts.mjs",
 		"translate:posts": "bun run translate:content",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "bun run test:site-translations && bun run test:post-releases && bun run test:post-ids && bun run test:giscus-sync && bun run test:hub-hints && bun run test:preservation && bun run test:extensions && bun run posts:ids:check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check": "bun run test:site-translations && bun run test:post-releases && bun run test:post-ids && bun run test:giscus-sync && bun run test:hub-hints && bun run test:preservation && bun run test:extensions && bun run test:analytics && bun run posts:ids:check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
@@ -26,7 +26,8 @@
 		"test:extensions": "bun ./tests/test-extensions.ts",
 		"update:check": "bun ./scripts/validate-update.mjs",
 		"test:template": "bun ./tests/test-template-integration.mjs",
-		"test:history": "PYTHONPATH=scripts/history python3 -m unittest discover -s tests/history -p 'test_*.py' -v"
+		"test:history": "PYTHONPATH=scripts/history python3 -m unittest discover -s tests/history -p 'test_*.py' -v",
+		"test:analytics": "bun ./tests/test-analytics.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.3",
