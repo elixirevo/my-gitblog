@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import SearchModal from '$lib/components/SearchModal.svelte';
 	import SiteLayout from '$lib/theme/SiteLayout.svelte';
+	import BlogAnalytics from './BlogAnalytics.svelte';
 	import PageExtensions from './PageExtensions.svelte';
 	import { createSiteController } from './site-controller.svelte';
 	let { children }: { children: Snippet } = $props();
@@ -23,6 +24,7 @@
 		<link rel="alternate" type="application/rss+xml" title={rssLink.title} href={rssLink.href} />
 	{/each}
 </svelte:head>
+<BlogAnalytics siteUrl={state.site.url} />
 <SiteLayout {state} {context} {children} />
 <PageExtensions {context} />
 <SearchModal
