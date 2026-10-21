@@ -15,6 +15,10 @@ export const getHubManifest = () => {
 
 	return {
 		schemaVersion: 1,
+		name: site.title,
+		imageUrl: /^https:\/\//i.test(publicEnv.PUBLIC_SITE_IMAGE?.trim() || '')
+			? publicEnv.PUBLIC_SITE_IMAGE?.trim() || null
+			: null,
 		buildCommit: privateEnv.GITBLOG_BUILD_COMMIT || undefined,
 		enabled: !isDisabled(publicEnv.PUBLIC_HUB_ENABLED),
 		repository,
