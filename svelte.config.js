@@ -1,3 +1,4 @@
+import { loadEnv } from 'vite';
 import adapter from '@sveltejs/adapter-static';
 
 const normalizeBase = (value) => {
@@ -18,7 +19,8 @@ const isProjectPages =
 const defaultBase =
 	process.env.GITHUB_ACTIONS === 'true' && isProjectPages ? normalizeBase(repoName) : '';
 
-const base = normalizeBase(process.env.SITE_BASE_PATH ?? defaultBase);
+const siteUrl = process.env.PUBLIC_SITE_URL || loadEnv('production', process.cwd(), 'PUBLIC_').PUBLIC_SITE_URL;
+const base = normalizeBase(process.env.SITE_BASE_PATH ?? (siteUrl ? new URL(siteUrl).pathname : defaultBase));
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
